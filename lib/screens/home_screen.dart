@@ -5,7 +5,6 @@ import 'dart:io';
 import '../services/pdf_generator_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  // تم الإصلاح هنا: صيغة مفتاح السوبر الصحيحة والحديثة
   const HomeScreen({super.key});
 
   @override
@@ -15,9 +14,14 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Excel? _excelData;
   String? _excelPath;
-  String? _qrFolderPath;
+
+  // المسارات الثابتة والمحددة للتخزين الداخلي
+  final String _baseDirectoryPath = '/storage/emulated/0/Download/درجات الطلاب';
+  late final String _qrFolderPath = '$_baseDirectoryPath/qr_pict';
   
-  final List<String> _classes =["ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "أول ثانوي", "ثاني ثانوي","ثالث ثانوي"];
+  final List<String> _classes = [
+    "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "أول ثانوي", "ثاني ثانوي", "ثالث ثانوي"
+  ];
   String? _selectedClass;
 
   List<String> _subjects = [];
@@ -41,7 +45,6 @@ class _HomeScreenState extends State<HomeScreen> {
       
       if (sheet.maxRows > 0) {
         var firstRow = sheet.rows.first;
-        // تم الإصلاح هنا: تحويل maxCols إلى maxColumns لتتوافق مع إصدار الحزمة الحديث
         int endColumn = sheet.maxColumns < 19 ? sheet.maxColumns : 19; 
         
         for (int i = 4; i < endColumn; i++) {
@@ -65,35 +68,31 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _pickQrFolder() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-
-    if (selectedDirectory != null) {
-      String autoTargetFolder = "$selectedDirectory/qr_pict";
-      
-      setState(() {
-        _qrFolderPath = autoTargetFolder;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("تم ربط مسار رموز الـ QR بمجلد qr_pict بنجاح", textAlign: TextAlign.center)),
-      );
-    }
-  }
-
   Future<void> _startPdfGeneration() async {
-    if (_excelData == null || _qrFolderPath == null || _selectedClass == null || _selectedSubject == null) {
+    if (_excelData == null || _selectedClass == null || _selectedSubject == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الرجاء إدخال واختيار جميع البيانات المطلوبة", textAlign: TextAlign.center), backgroundColor: Colors.orange),
+        const SnackBar(content: Text("الرجاء اختيار ملف الأكسيل والصف والمادة أولاً", textAlign: TextAlign.center), backgroundColor: Colors.orange),
       );
       return;
     }
 
-    if (!await Directory(_qrFolderPath!).exists()) {
+    // التحقق من وجود مجلد صور الـ QR تلقائياً
+    Directory qrDir = Directory(_qrFolderPath);
+    if (!await qrDir.exists()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("خطأ: لم يتم العثور على مجلد اسمه 'qr_pict' في المسار المحدد!", textAlign: TextAlign.center), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text("خطأ: لم يتم العثور على المجلد التالي:\n$_qrFolderPath", textAlign: TextAlign.center), 
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 4),
+        ),
       );
       return;
+    }
+
+    // التأكد من وجود مجلد 'درجات الطلاب' الرئيسي للحفظ
+    Directory baseDir = Directory(_baseDirectoryPath);
+    if (!await baseDir.exists()) {
+      await baseDir.create(recursive: true);
     }
 
     setState(() {
@@ -103,21 +102,25 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       int subjectOrderNumber = _subjects.indexOf(_selectedSubject!) + 1;
       
-      String? outputDirectory = await FilePicker.platform.getDirectoryPath();
-      
-      if (outputDirectory != null) {
-        String resultPath = await PdfGeneratorService.generatePapers(
-          excelData: _excelData!,
-          qrFolderPath: _qrFolderPath!,
-          selectedClass: _selectedClass!,
-          selectedSubject: subjectOrderNumber.toString(),
-          outputPath: outputDirectory,
-        );
+      // اسم الملف التلقائي: الصف - المادة
+      String outputFileName = "$_selectedClass - $_selectedSubject";
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("تم توليد وحفظ أوراق الاختبار بنجاح:\n$resultPath", textAlign: TextAlign.center), backgroundColor: Colors.green),
-        );
-      }
+      String resultPath = await PdfGeneratorService.generatePapers(
+        excelData: _excelData!,
+        qrFolderPath: _qrFolderPath,
+        selectedClass: _selectedClass!,
+        selectedSubject: subjectOrderNumber.toString(),
+        outputPath: _baseDirectoryPath,
+        outputFileName: outputFileName, // إرسال الاسم المطلق للخدمة
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("تم حفظ الملف بنجاح في:\n$resultPath", textAlign: TextAlign.center), 
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center), backgroundColor: Colors.red),
@@ -173,16 +176,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   return DropdownMenuItem<String>(value: value, child: Text(value));
                 }).toList(),
                 onChanged: (value) => setState(() => _selectedSubject = value),
-              ),
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: _pickQrFolder,
-                icon: const Icon(Icons.folder_shared),
-                label: Text(_qrFolderPath == null ? "تحديد المجلد الرئيسي (المحتوي على qr_pict)" : "تم ربط مجلد qr_pict الفعلي"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _qrFolderPath == null ? Colors.blueGrey : Colors.green,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
-                ),
               ),
               const SizedBox(height: 40),
               _isGenerating
