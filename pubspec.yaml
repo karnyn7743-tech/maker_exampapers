@@ -12,9 +12,9 @@ dependencies:
   
   # المكتبات الأساسية للمشروع المحدث
   excel: ^4.0.0
-  pdf: ^3.10.4
-  file_picker: ^6.1.1
-  permission_handler: ^11.0.1
+  pdf: ^3.10.8
+  file_picker: ^8.0.0 # ✅ تم التحديث لحل تحذيرات المنصات في السجلات
+  permission_handler: ^11.3.1
 
 dev_dependencies:
   flutter_test:
