@@ -148,7 +148,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.attach_file),
                 label: Text(_excelPath == null ? "تحميل ملف الأكسيل للطلاب" : "تم تحميل ملف الأكسيل بنجاح"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _excelPath == null ? Colors.blueGrey : Colors.green,
+                  backgroundColor: _excelPath == null ? Colors.orange : Colors.green,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
               ),
@@ -180,7 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.folder_shared),
                 label: Text(_qrFolderPath == null ? "تحديد المجلد الرئيسي (المحتوي على qr_pict)" : "تم ربط مجلد qr_pict الفعلي"),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _qrFolderPath == null ? Colors.blueGrey : Colors.green,
+                  backgroundColor: _qrFolderPath == null ? Colors.orange : Colors.green,
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
               ),
