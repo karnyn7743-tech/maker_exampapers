@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("إعداد وتوليد أوراق الاختبارات", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("إعداد وتوليد رموز الإستجابة على أوراق الاختبارات", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: Directionality(
