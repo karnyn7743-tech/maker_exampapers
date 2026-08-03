@@ -121,7 +121,7 @@ class PdfGeneratorService {
                       ),
                       pw.SizedBox(width: 10),
 
-                      // 2. [منطقة الـ QR نظيفة تماماً بمقاس 60x60]
+                      // 2. [منطقة الـ QR نظيفة تماماً بمقاس 40x40]
                       pw.Container(
                         width: 40,
                         height: 40,
