@@ -5,7 +5,7 @@ import 'dart:io';
 import '../services/pdf_generator_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? super.key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -40,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
       
       if (sheet.maxRows > 0) {
         var firstRow = sheet.rows.first;
-        // استخدام maxColumns بدلاً من maxCols
         int endColumn = sheet.maxColumns < 19 ? sheet.maxColumns : 19; 
         
         for (int i = 4; i < endColumn; i++) {
@@ -121,7 +120,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center), backgroundColor: Colors.red),
       );
-    } finally { // تم إصلاح الكلمة هنا من final إلى finally
+    } finally {
       setState(() {
         _isGenerating = false;
       });
