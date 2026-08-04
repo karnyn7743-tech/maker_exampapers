@@ -12,7 +12,7 @@ void main() async {
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({Key? super.key});
+  const MyApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -20,7 +20,7 @@ class MyApp extends StatelessWidget {
       title: 'صانع أوراق الاختبارات',
       theme: ThemeData(
         primarySwatch: Colors.blue,
-        useMaterial3: true,
+        useMaterial3: true, // ✅ تم التعديل هنا بدلاً من useMaterialDesign
       ),
       debugShowCheckedModeBanner: false,
       home: const HomeScreen(), // توجيه التطبيق ليفتح مباشرة على واجهة التوليد المرنة
