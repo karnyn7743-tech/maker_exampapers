@@ -5,7 +5,7 @@ import 'dart:io';
 import '../services/pdf_generator_service.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({Key? super.key}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -14,25 +14,23 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Excel? _excelData;
   String? _excelPath;
-
-  // المسارات الثابتة والمحددة للتخزين الداخلي
-  final String _baseDirectoryPath = '/storage/emulated/0/Download/درجات الطلاب';
-  late final String _qrFolderPath = '$_baseDirectoryPath/qr_pict';
+  String? _qrFolderPath;
   
-  final List<String> _classes = [
-    "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "أول ثانوي", "ثاني ثانوي", "ثالث ثانوي"
-  ];
+  // قائمة الصفوف المتاحة (ثابتة بحسب المراحل)
+  final List<String> _classes = ["رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع"];
   String? _selectedClass;
 
+  // قائمة المواد ستصبح ديناميكية تتغير بحسب ملف الأكسيل
   List<String> _subjects = [];
   String? _selectedSubject;
 
   bool _isGenerating = false;
 
+  // دالة اختيار ملف الإكسيل وقراءة أسماء المواد ديناميكياً
   Future<void> _pickExcelFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls', 'xlsm', 'xlsb'],
+      allowedExtensions: ['xlsx', 'xls'],
     );
 
     if (result != null && result.files.single.path != null) {
@@ -43,9 +41,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
       List<String> extractedSubjects = [];
       
+      // قراءة الصف الأول (رؤوس الأعمدة) من العمود E (مؤشر 4) إلى العمود S (مؤشر 18)
       if (sheet.maxRows > 0) {
         var firstRow = sheet.rows.first;
-        int endColumn = sheet.maxColumns < 19 ? sheet.maxColumns : 19; 
+        int endColumn = sheet.maxCols < 19 ? sheet.maxCols : 19; // لضمان عدم تجاوز حدود الملف
         
         for (int i = 4; i < endColumn; i++) {
           var cellValue = firstRow[i]?.value?.toString().trim();
@@ -59,7 +58,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _excelPath = result.files.single.path;
         _excelData = excel;
         _subjects = extractedSubjects;
-        _selectedSubject = null;
+        _selectedSubject = null; // إعادة تعيين المادة المختارة عند رفع ملف جديد
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -68,31 +67,39 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  // دالة اختيار المجلد وتوجيهه تلقائياً إلى مجلد "qr_pict"
+  Future<void> _pickQrFolder() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+
+    if (selectedDirectory != null) {
+      // دمج المسار المختار مع اسم المجلد الثابت qr_pict ليتوافق مع تطبيقك الآخر
+      String autoTargetFolder = "$selectedDirectory/qr_pict";
+      
+      setState(() {
+        _qrFolderPath = autoTargetFolder;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("تم ربط مسار رموز الـ QR بمجلد qr_pict بنجاح", textAlign: TextAlign.center)),
+      );
+    }
+  }
+
+  // دالة بدء التوليد
   Future<void> _startPdfGeneration() async {
-    if (_excelData == null || _selectedClass == null || _selectedSubject == null) {
+    if (_excelData == null || _qrFolderPath == null || _selectedClass == null || _selectedSubject == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الرجاء اختيار ملف الأكسيل والصف والمادة أولاً", textAlign: TextAlign.center), backgroundColor: Colors.orange),
+        const SnackBar(content: Text("الرجاء إدخال واختيار جميع البيانات المطلوبة", textAlign: TextAlign.center), backgroundColor: Colors.orange),
       );
       return;
     }
 
-    // التحقق من وجود مجلد صور الـ QR تلقائياً
-    Directory qrDir = Directory(_qrFolderPath);
-    if (!await qrDir.exists()) {
+    // التحقق من وجود مجلد qr_pict فعلياً لتفادي توقف التطبيق
+    if (!await Directory(_qrFolderPath!).exists()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("خطأ: لم يتم العثور على المجلد التالي:\n$_qrFolderPath", textAlign: TextAlign.center), 
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
+        const SnackBar(content: Text("خطأ: لم يتم العثور على مجلد اسمه 'qr_pict' في المسار المحدد!", textAlign: TextAlign.center), backgroundColor: Colors.red),
       );
       return;
-    }
-
-    // التأكد من وجود مجلد 'درجات الطلاب' الرئيسي للحفظ
-    Directory baseDir = Directory(_baseDirectoryPath);
-    if (!await baseDir.exists()) {
-      await baseDir.create(recursive: true);
     }
 
     setState(() {
@@ -100,32 +107,30 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
+      // جلب رقم ترتيب المادة بناءً على موقعها المكتشف من الإكسيل (index + 1)
       int subjectOrderNumber = _subjects.indexOf(_selectedSubject!) + 1;
       
-      // اسم الملف التلقائي: الصف - المادة
-      String outputFileName = "$_selectedClass - $_selectedSubject";
+      // اختيار مجلد حفظ ملف الـ PDF النهائي
+      String? outputDirectory = await FilePicker.platform.getDirectoryPath();
+      
+      if (outputDirectory != null) {
+        String resultPath = await PdfGeneratorService.generatePapers(
+          excelData: _excelData!,
+          qrFolderPath: _qrFolderPath!,
+          selectedClass: _selectedClass!,
+          selectedSubject: subjectOrderNumber.toString(), // نمرر الرقم الترتيبي للمادة هنا (1، 2، 3...)
+          outputPath: outputDirectory,
+        );
 
-      String resultPath = await PdfGeneratorService.generatePapers(
-        excelData: _excelData!,
-        qrFolderPath: _qrFolderPath,
-        selectedClass: _selectedClass!,
-        selectedSubject: subjectOrderNumber.toString(),
-        outputPath: _baseDirectoryPath,
-        outputFileName: outputFileName, // إرسال الاسم المطلق للخدمة
-      );
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text("تم حفظ الملف بنجاح في:\n$resultPath", textAlign: TextAlign.center), 
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("تم توليد وحفظ أوراق الاختبار بنجاح:\n$resultPath", textAlign: TextAlign.center), backgroundColor: Colors.green),
+        );
+      }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center), backgroundColor: Colors.red),
       );
-    } finally {
+    } final {
       setState(() {
         _isGenerating = false;
       });
@@ -146,6 +151,8 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListView(
             children: [
               const SizedBox(height: 20),
+              
+              // زر اختيار ملف الإكسيل
               ElevatedButton.icon(
                 onPressed: _pickExcelFile,
                 icon: const Icon(Icons.attach_file),
@@ -155,7 +162,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
               ),
+              
               const SizedBox(height: 20),
+
+              // قائمة اختيار الصف
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(labelText: "اختر الصف الدراسي", border: OutlineInputBorder()),
                 value: _selectedClass,
@@ -164,7 +174,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 }).toList(),
                 onChanged: (value) => setState(() => _selectedClass = value),
               ),
+
               const SizedBox(height: 20),
+
+              // قائمة اختيار المادة (تظهر خياراتها ديناميكياً بعد رفع الإكسيل)
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(
                   labelText: "اختر المادة الدراسية", 
@@ -177,7 +190,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 }).toList(),
                 onChanged: (value) => setState(() => _selectedSubject = value),
               ),
+
+              const SizedBox(height: 20),
+
+              // زر تحديد المجلد الذي يحتوي على qr_pict
+              ElevatedButton.icon(
+                onPressed: _pickQrFolder,
+                icon: const Icon(Icons.folder_shared),
+                label: Text(_qrFolderPath == null ? "تحديد المجلد الرئيسي (المحتوي على qr_pict)" : "تم ربط مجلد qr_pict الفعلي"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _qrFolderPath == null ? Colors.blueGrey : Colors.green,
+                  padding: const EdgeInsets.symmetric(vertical: 15),
+                ),
+              ),
+
               const SizedBox(height: 40),
+
+              // زر التوليد النهائي
               _isGenerating
                   ? const Center(child: CircularProgressIndicator())
                   : ElevatedButton(
