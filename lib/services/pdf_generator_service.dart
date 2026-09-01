@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:excel/excel.dart';
 import 'package:pdf/pdf.dart';
@@ -6,7 +7,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 
 class PdfGeneratorService {
-  /// استخراج مسار مجلد الحفظ العام المباشر (Download/درجات الطلاب)
   static Future<Directory> _getPublicDirectory() async {
     Directory? externalDir = await getExternalStorageDirectory();
     String newPath = "";
@@ -27,31 +27,41 @@ class PdfGeneratorService {
     return targetDir;
   }
 
-  static Future<String> generatePapers({
+  /// دالة تشغيل التوليد في الخفاء لمنع تعليق الواجهة
+  static Future<String> generatePapersInIsolate({
     required Excel excelData,
     required String qrFolderPath,
     required String selectedClass,
     required String selectedSubject,
-    String? outputPath,
+    required ByteData fontData,
   }) async {
-    final pdf = pw.Document();
+    return compute(_generateProcess, {
+      'excelData': excelData,
+      'qrFolderPath': qrFolderPath,
+      'selectedClass': selectedClass,
+      'selectedSubject': selectedSubject,
+      'fontByteData': fontData,
+      'targetFolderPath': (await _getPublicDirectory()).path,
+    });
+  }
 
-    // تحميل الخط العربي مع معالجة الاستثناء في حال عدم وجود الملف
-    pw.Font ttfFont;
-    try {
-      final fontData = await rootBundle.load("assets/fonts/Amiri_Regular.ttf");
-      ttfFont = pw.Font.ttf(fontData);
-    } catch (e) {
-      // استخدام خط نسبي افتراضي عند تعذر تحميل خط الملفات
-      ttfFont = pw.Font.ttf(await rootBundle.load("packages/pdf/fonts/Roboto-Regular.ttf"));
-    }
+  static Future<String> _generateProcess(Map<String, dynamic> params) async {
+    final Excel excelData = params['excelData'];
+    final String qrFolderPath = params['qrFolderPath'];
+    final String selectedClass = params['selectedClass'];
+    final String selectedSubject = params['selectedSubject'];
+    final ByteData fontByteData = params['fontByteData'];
+    final String targetFolderPath = params['targetFolderPath'];
+
+    final pdf = pw.Document();
+    final ttfFont = pw.Font.ttf(fontByteData);
 
     String sheetName = excelData.tables.keys.first;
     var sheet = excelData.tables[sheetName]!;
 
     String subjectNameString = "مادة_$selectedSubject";
     try {
-      int colIndex = int.parse(selectedSubject) + 3; // العمود المخصص للمادة
+      int colIndex = int.parse(selectedSubject) + 3;
       if (sheet.maxRows > 0 && colIndex < sheet.maxColumns) {
         var headerCellValue = sheet.rows.first[colIndex]?.value;
         if (headerCellValue != null && headerCellValue.toString().trim().isNotEmpty) {
@@ -60,23 +70,21 @@ class PdfGeneratorService {
       }
     } catch (_) {}
 
-    // التكرار على جميع صفوف الطلاب (ابتداءً من الصف الثاني)
     for (int i = 1; i < sheet.maxRows; i++) {
       var row = sheet.rows[i];
       if (row.isEmpty) continue;
 
-      // قراءة العمود 0 (رقم القيد/ID) والعمود 1 (اسم الطالب)
       String studentId = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : "";
       String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول";
 
-      // تجاوز الصفوف الفارغة من رقم القيد
       if (studentId.isEmpty) continue;
 
-      // جلب صورة הـ QR بالاعتماد على رقم القيد (ID)
       final qrFile = File("$qrFolderPath/$studentId.png");
       pw.MemoryImage? qrImage;
-      if (await qrFile.exists()) {
-        qrImage = pw.MemoryImage(await qrFile.readAsBytes());
+      if (qrFile.existsSync()) {
+        try {
+          qrImage = pw.MemoryImage(qrFile.readAsBytesSync());
+        } catch (_) {}
       }
 
       pdf.addPage(
@@ -91,7 +99,6 @@ class PdfGeneratorService {
                 child: pw.Column(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    // شريط بيانات الطالب في أعلى الورقة
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       children: [
@@ -110,10 +117,7 @@ class PdfGeneratorService {
                         ),
                       ],
                     ),
-
                     pw.Spacer(),
-
-                    // شريط مربعات الكنترول والـ QR في أسفل الورقة
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -121,7 +125,6 @@ class PdfGeneratorService {
                         pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.end,
                           children: [
-                            // مربع رقم المادة
                             pw.Container(
                               width: 40,
                               height: 40,
@@ -135,8 +138,6 @@ class PdfGeneratorService {
                               ),
                             ),
                             pw.SizedBox(width: 10),
-
-                            // مربع رمز الـ QR
                             pw.Container(
                               width: 40,
                               height: 40,
@@ -148,8 +149,6 @@ class PdfGeneratorService {
                                   : pw.SizedBox(),
                             ),
                             pw.SizedBox(width: 10),
-
-                            // مربع إدخال الدرجة الشفاف
                             pw.Container(
                               width: 40,
                               height: 40,
@@ -172,15 +171,13 @@ class PdfGeneratorService {
       );
     }
 
-    // تحديد مسار الحفظ المباشر النهائي في مجلد درجات الطلاب
-    final Directory targetFolder = await _getPublicDirectory();
-    final String cleanSubjectName = subjectNameString.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final String finalFileName = "${targetFolder.path}/امتحانات_${selectedClass}_$cleanSubjectName.pdf";
-    
-    final file = File(finalFileName);
-    final pdfBytes = await pdf.save();
-    await file.writeAsBytes(pdfBytes, flush: true);
+    final String cleanSubject = subjectNameString.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final String finalFilePath = "$targetFolderPath/امتحانات_${selectedClass}_$cleanSubject.pdf";
 
-    return finalFileName;
+    final file = File(finalFilePath);
+    final bytes = await pdf.save();
+    await file.writeAsBytes(bytes, flush: true);
+
+    return finalFilePath;
   }
 }
