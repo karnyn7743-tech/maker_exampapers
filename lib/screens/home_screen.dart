@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border; // تجنب التضارب مع Flutter Border
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
@@ -80,7 +80,6 @@ class _HomeScreenState extends State<HomeScreen> {
       final String cachePath = result.files.single.path!;
       final String fileName = result.files.single.name;
 
-      // نقل الملف إلى مجلد درجات الطلاب المباشر
       final Directory publicDir = await _getPublicDirectory();
       final File destinationFile = File("${publicDir.path}/$fileName");
 
@@ -108,7 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      // تحديد مسار مجلد الـ QR تلقائياً داخل نفس المجلد
       String autoQrFolder = "${publicDir.path}/qr_pict";
 
       setState(() {
@@ -139,7 +137,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    // التأكد من وجود مجلد qr_pict
     if (_qrFolderPath == null || !await Directory(_qrFolderPath!).exists()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -156,11 +153,8 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       int subjectOrderNumber = _subjects.indexOf(_selectedSubject!) + 1;
-
-      // تحميل الخط العربي المخصص
       final fontData = await rootBundle.load("assets/fonts/Amiri_Regular.ttf");
 
-      // بدء التوليد في الخفاء لمنع تعليق الشاشة
       String resultPath = await PdfGeneratorService.generatePapersInIsolate(
         excelData: _excelData!,
         qrFolderPath: _qrFolderPath!,
@@ -194,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("ذو القرنين لتوليد أوراق الاختبارات", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("ذو القرنين الهاشمي لأوراق الاختبارات", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: Directionality(
@@ -295,7 +289,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                       ),
                     ),
-          ],
+            ],
+          ),
         ),
       ),
     );
