@@ -16,7 +16,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String? _excelPath;
   String? _qrFolderPath;
   
-  final List<String> _classes = ["رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع"];
+  final List<String> _classes = ["ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "أول ثانوي", "ثاني ثانوي","ثالث ثانوي"];
   String? _selectedClass;
 
   List<String> _subjects = [];
@@ -27,7 +27,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _pickExcelFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['xlsx', 'xls'],
+      allowedExtensions: ['xlsx', 'xlsm', 'xlsb', 'xls'],
     );
 
     if (result != null && result.files.single.path != null) {
