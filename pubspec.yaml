@@ -15,6 +15,14 @@ dependencies:
   pdf: ^3.10.8
   file_picker: ^8.0.0 # ✅ تم التحديث لحل تحذيرات المنصات في السجلات
   permission_handler: ^11.3.1
+  mobile_scanner: ^5.1.1
+  google_mlkit_text_recognition: ^0.13.0
+  shared_preferences: ^2.2.3
+  qrscan_plus: ^2.0.0
+
+  # أضف هذه الحزمة هنا
+  path_provider: ^2.1.2
+
 
 dev_dependencies:
   flutter_test:
