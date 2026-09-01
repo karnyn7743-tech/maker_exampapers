@@ -1,7 +1,7 @@
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:excel/excel.dart';
+import 'package:excel/excel.dart' hide Border;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
@@ -27,17 +27,14 @@ class PdfGeneratorService {
     return targetDir;
   }
 
-  /// دالة تشغيل التوليد في الخفاء لمنع تعليق الواجهة
   static Future<String> generatePapersInIsolate({
     required Excel excelData,
-    required String qrFolderPath,
     required String selectedClass,
     required String selectedSubject,
     required ByteData fontData,
   }) async {
     return compute(_generateProcess, {
       'excelData': excelData,
-      'qrFolderPath': qrFolderPath,
       'selectedClass': selectedClass,
       'selectedSubject': selectedSubject,
       'fontByteData': fontData,
@@ -47,7 +44,6 @@ class PdfGeneratorService {
 
   static Future<String> _generateProcess(Map<String, dynamic> params) async {
     final Excel excelData = params['excelData'];
-    final String qrFolderPath = params['qrFolderPath'];
     final String selectedClass = params['selectedClass'];
     final String selectedSubject = params['selectedSubject'];
     final ByteData fontByteData = params['fontByteData'];
@@ -74,18 +70,18 @@ class PdfGeneratorService {
       var row = sheet.rows[i];
       if (row.isEmpty) continue;
 
+      // قراءة البيانات من الأعمدة المحددة
+      // العمود A (0): رقم القيد
+      // العمود B (1): اسم الطالب
+      // العمود D (3): الرقم السري
       String studentId = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : "";
       String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول";
+      String secretCode = row.length > 3 && row[3]?.value != null ? row[3]!.value.toString().trim() : "";
 
-      if (studentId.isEmpty) continue;
+      // الأولوية للرقم السري (العمود D)، وإذا كان فارغاً يتم الاعتماد على رقم القيد (العمود A)
+      String qrData = secretCode.isNotEmpty ? secretCode : studentId;
 
-      final qrFile = File("$qrFolderPath/$studentId.png");
-      pw.MemoryImage? qrImage;
-      if (qrFile.existsSync()) {
-        try {
-          qrImage = pw.MemoryImage(qrFile.readAsBytesSync());
-        } catch (_) {}
-      }
+      if (qrData.isEmpty) continue;
 
       pdf.addPage(
         pw.Page(
@@ -99,6 +95,7 @@ class PdfGeneratorService {
                 child: pw.Column(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
+                    // أعلى الورقة: بيانات الطالب
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       children: [
@@ -117,7 +114,10 @@ class PdfGeneratorService {
                         ),
                       ],
                     ),
+
                     pw.Spacer(),
+
+                    // أسفل الورقة: مربع المادة - توليد الـ QR بالرقم السري - مربع الدرجة
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -125,6 +125,7 @@ class PdfGeneratorService {
                         pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.end,
                           children: [
+                            // مربع المادة
                             pw.Container(
                               width: 40,
                               height: 40,
@@ -138,17 +139,24 @@ class PdfGeneratorService {
                               ),
                             ),
                             pw.SizedBox(width: 10),
+
+                            // توليد رمز الـ QR بالرقم السري (العمود D) مباشرة
                             pw.Container(
-                              width: 40,
-                              height: 40,
+                              width: 45,
+                              height: 45,
+                              padding: const pw.EdgeInsets.all(2),
                               decoration: pw.BoxDecoration(
                                 border: pw.Border.all(color: PdfColors.grey400, width: 0.5),
                               ),
-                              child: qrImage != null
-                                  ? pw.Image(qrImage, fit: pw.BoxFit.cover)
-                                  : pw.SizedBox(),
+                              child: pw.BarcodeWidget(
+                                barcode: pw.Barcode.qrCode(),
+                                data: qrData,
+                                drawText: false,
+                              ),
                             ),
                             pw.SizedBox(width: 10),
+
+                            // مربع إدخال الدرجة الشفاف
                             pw.Container(
                               width: 40,
                               height: 40,
