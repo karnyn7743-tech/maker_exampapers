@@ -17,7 +17,6 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   Excel? _excelData;
   String? _excelPath;
-  String? _qrFolderPath;
 
   final List<String> _classes = [
     "ثالث",
@@ -107,19 +106,16 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
-      String autoQrFolder = "${publicDir.path}/qr_pict";
-
       setState(() {
         _excelPath = destinationFile.path;
         _excelData = excel;
         _subjects = extractedSubjects;
         _selectedSubject = null;
-        _qrFolderPath = autoQrFolder;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("تم تحميل ملف الأكسيل وربط مجلد qr_pict تلقائياً", textAlign: TextAlign.center),
+          content: Text("تم تحميل ملف الأكسيل بنجاح", textAlign: TextAlign.center),
           backgroundColor: Colors.green,
         ),
       );
@@ -137,16 +133,6 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    if (_qrFolderPath == null || !await Directory(_qrFolderPath!).exists()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("خطأ: لم يتم العثور على مجلد 'qr_pict'! يرجى توليد رموز الـ QR أولاً.", textAlign: TextAlign.center),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
     setState(() {
       _isGenerating = true;
     });
@@ -157,7 +143,6 @@ class _HomeScreenState extends State<HomeScreen> {
 
       String resultPath = await PdfGeneratorService.generatePapersInIsolate(
         excelData: _excelData!,
-        qrFolderPath: _qrFolderPath!,
         selectedClass: _selectedClass!,
         selectedSubject: subjectOrderNumber.toString(),
         fontData: fontData,
@@ -233,37 +218,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   return DropdownMenuItem<String>(value: value, child: Text(value));
                 }).toList(),
                 onChanged: (value) => setState(() => _selectedSubject = value),
-              ),
-
-              const SizedBox(height: 20),
-
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: _qrFolderPath != null ? Colors.green.shade50 : Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: _qrFolderPath != null ? Colors.green : Colors.grey.shade400),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _qrFolderPath != null ? Icons.check_circle : Icons.folder,
-                      color: _qrFolderPath != null ? Colors.green : Colors.grey,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _qrFolderPath == null
-                            ? "مسار qr_pict: يتم ربطه تلقائياً بعد اختيار الأكسيل"
-                            : "تم ربط مجلد qr_pict تلقائياً",
-                        style: TextStyle(
-                          color: _qrFolderPath != null ? Colors.green.shade900 : Colors.black87,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
               ),
 
               const SizedBox(height: 40),
