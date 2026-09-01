@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:excel/excel.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import '../services/pdf_generator_service.dart';
 
@@ -15,14 +18,57 @@ class _HomeScreenState extends State<HomeScreen> {
   Excel? _excelData;
   String? _excelPath;
   String? _qrFolderPath;
-  
-  final List<String> _classes = ["ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "أول ثانوي", "ثاني ثانوي","ثالث ثانوي"];
+
+  final List<String> _classes = [
+    "ثالث",
+    "رابع",
+    "خامس",
+    "سادس",
+    "سابع",
+    "ثامن",
+    "تاسع",
+    "أول ثانوي",
+    "ثاني ثانوي",
+    "ثالث ثانوي"
+  ];
   String? _selectedClass;
 
   List<String> _subjects = [];
   String? _selectedSubject;
 
   bool _isGenerating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _requestPermissions();
+  }
+
+  Future<void> _requestPermissions() async {
+    await Permission.storage.request();
+    await Permission.manageExternalStorage.request();
+  }
+
+  /// الحصول على المسار المباشر لمجلد (Download/درجات الطلاب)
+  Future<Directory> _getPublicDirectory() async {
+    Directory? externalDir = await getExternalStorageDirectory();
+    String newPath = "";
+    List<String> paths = externalDir!.path.split("/");
+    for (int x = 1; x < paths.length; x++) {
+      String folder = paths[x];
+      if (folder != "Android") {
+        newPath += "/" + folder;
+      } else {
+        break;
+      }
+    }
+
+    Directory targetDir = Directory("$newPath/Download/درجات الطلاب");
+    if (!await targetDir.exists()) {
+      await targetDir.create(recursive: true);
+    }
+    return targetDir;
+  }
 
   Future<void> _pickExcelFile() async {
     FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -31,17 +77,29 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     if (result != null && result.files.single.path != null) {
-      var bytes = File(result.files.single.path!).readAsBytesSync();
+      final String cachePath = result.files.single.path!;
+      final String fileName = result.files.single.name;
+
+      // نقل الملف إلى مجلد درجات الطلاب المباشر
+      final Directory publicDir = await _getPublicDirectory();
+      final File destinationFile = File("${publicDir.path}/$fileName");
+
+      if (!await destinationFile.exists()) {
+        final sourceBytes = await File(cachePath).readAsBytes();
+        await destinationFile.writeAsBytes(sourceBytes, flush: true);
+      }
+
+      var bytes = await destinationFile.readAsBytes();
       var excel = Excel.decodeBytes(bytes);
       String sheetName = excel.tables.keys.first;
       var sheet = excel.tables[sheetName]!;
 
       List<String> extractedSubjects = [];
-      
+
       if (sheet.maxRows > 0) {
         var firstRow = sheet.rows.first;
-        int endColumn = sheet.maxColumns < 19 ? sheet.maxColumns : 19; 
-        
+        int endColumn = sheet.maxColumns < 19 ? sheet.maxColumns : 19;
+
         for (int i = 4; i < endColumn; i++) {
           var cellValue = firstRow[i]?.value?.toString().trim();
           if (cellValue != null && cellValue.isNotEmpty) {
@@ -50,46 +108,44 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       }
 
+      // تحديد مسار مجلد الـ QR تلقائياً داخل نفس المجلد
+      String autoQrFolder = "${publicDir.path}/qr_pict";
+
       setState(() {
-        _excelPath = result.files.single.path;
+        _excelPath = destinationFile.path;
         _excelData = excel;
         _subjects = extractedSubjects;
         _selectedSubject = null;
+        _qrFolderPath = autoQrFolder;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("تم تحميل ملف الأكسيل واستخراج المواد بنجاح", textAlign: TextAlign.center)),
-      );
-    }
-  }
-
-  Future<void> _pickQrFolder() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-
-    if (selectedDirectory != null) {
-      String autoTargetFolder = "$selectedDirectory/qr_pict";
-      
-      setState(() {
-        _qrFolderPath = autoTargetFolder;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("تم ربط مسار رموز الـ QR بمجلد qr_pict بنجاح", textAlign: TextAlign.center)),
+        const SnackBar(
+          content: Text("تم تحميل ملف الأكسيل وربط مجلد qr_pict تلقائياً", textAlign: TextAlign.center),
+          backgroundColor: Colors.green,
+        ),
       );
     }
   }
 
   Future<void> _startPdfGeneration() async {
-    if (_excelData == null || _qrFolderPath == null || _selectedClass == null || _selectedSubject == null) {
+    if (_excelData == null || _selectedClass == null || _selectedSubject == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("الرجاء إدخال واختيار جميع البيانات المطلوبة", textAlign: TextAlign.center), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text("الرجاء إدخال واختيار جميع البيانات المطلوبة", textAlign: TextAlign.center),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
 
-    if (!await Directory(_qrFolderPath!).exists()) {
+    // التأكد من وجود مجلد qr_pict
+    if (_qrFolderPath == null || !await Directory(_qrFolderPath!).exists()) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("خطأ: لم يتم العثور على مجلد اسمه 'qr_pict' في المسار المحدد!", textAlign: TextAlign.center), backgroundColor: Colors.red),
+        const SnackBar(
+          content: Text("خطأ: لم يتم العثور على مجلد 'qr_pict'! يرجى توليد رموز الـ QR أولاً.", textAlign: TextAlign.center),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -100,25 +156,32 @@ class _HomeScreenState extends State<HomeScreen> {
 
     try {
       int subjectOrderNumber = _subjects.indexOf(_selectedSubject!) + 1;
-      
-      String? outputDirectory = await FilePicker.platform.getDirectoryPath();
-      
-      if (outputDirectory != null) {
-        String resultPath = await PdfGeneratorService.generatePapers(
-          excelData: _excelData!,
-          qrFolderPath: _qrFolderPath!,
-          selectedClass: _selectedClass!,
-          selectedSubject: subjectOrderNumber.toString(),
-          outputPath: outputDirectory,
-        );
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("تم توليد وحفظ أوراق الاختبار بنجاح:\n$resultPath", textAlign: TextAlign.center), backgroundColor: Colors.green),
-        );
-      }
+      // تحميل الخط العربي المخصص
+      final fontData = await rootBundle.load("assets/fonts/Amiri_Regular.ttf");
+
+      // بدء التوليد في الخفاء لمنع تعليق الشاشة
+      String resultPath = await PdfGeneratorService.generatePapersInIsolate(
+        excelData: _excelData!,
+        qrFolderPath: _qrFolderPath!,
+        selectedClass: _selectedClass!,
+        selectedSubject: subjectOrderNumber.toString(),
+        fontData: fontData,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("✅ تم توليد وحفظ أوراق الاختبار بنجاح:\n$resultPath", textAlign: TextAlign.center),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ),
+      );
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center), backgroundColor: Colors.red),
+        SnackBar(
+          content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center),
+          backgroundColor: Colors.red,
+        ),
       );
     } finally {
       setState(() {
@@ -131,7 +194,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("ذو القرنين الهاشمي لتوليد أوراق الاختبارات", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text("ذو القرنين لتوليد أوراق الاختبارات", style: TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
       body: Directionality(
@@ -141,7 +204,7 @@ class _HomeScreenState extends State<HomeScreen> {
           child: ListView(
             children: [
               const SizedBox(height: 20),
-              
+
               ElevatedButton.icon(
                 onPressed: _pickExcelFile,
                 icon: const Icon(Icons.attach_file),
@@ -151,7 +214,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
               ),
-              
+
               const SizedBox(height: 20),
 
               DropdownButtonFormField<String>(
@@ -167,9 +230,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
               DropdownButtonFormField<String>(
                 decoration: const InputDecoration(
-                  labelText: "اختر المادة الدراسية", 
+                  labelText: "اختر المادة الدراسية",
                   hintText: "يرجى رفع ملف الأكسيل أولاً لتظهر المواد",
-                  border: OutlineInputBorder()
+                  border: OutlineInputBorder(),
                 ),
                 value: _selectedSubject,
                 items: _subjects.map((String value) {
@@ -180,30 +243,59 @@ class _HomeScreenState extends State<HomeScreen> {
 
               const SizedBox(height: 20),
 
-              ElevatedButton.icon(
-                onPressed: _pickQrFolder,
-                icon: const Icon(Icons.folder_shared),
-                label: Text(_qrFolderPath == null ? "تحديد المجلد الرئيسي (المحتوي على qr_pict)" : "تم ربط مجلد qr_pict الفعلي"),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _qrFolderPath == null ? Colors.blueGrey : Colors.green,
-                  padding: const EdgeInsets.symmetric(vertical: 15),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: _qrFolderPath != null ? Colors.green.shade50 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: _qrFolderPath != null ? Colors.green : Colors.grey.shade400),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      _qrFolderPath != null ? Icons.check_circle : Icons.folder,
+                      color: _qrFolderPath != null ? Colors.green : Colors.grey,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        _qrFolderPath == null
+                            ? "مسار qr_pict: يتم ربطه تلقائياً بعد اختيار الأكسيل"
+                            : "تم ربط مجلد qr_pict تلقائياً",
+                        style: TextStyle(
+                          color: _qrFolderPath != null ? Colors.green.shade900 : Colors.black87,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
               const SizedBox(height: 40),
 
               _isGenerating
-                  ? const Center(child: CircularProgressIndicator())
+                  ? const Center(
+                      child: Column(
+                        children: [
+                          CircularProgressIndicator(),
+                          SizedBox(height: 10),
+                          Text("جاري توليد ملف الـ PDF... يرجى الانتظار"),
+                        ],
+                      ),
+                    )
                   : ElevatedButton(
                       onPressed: _startPdfGeneration,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                       ),
-                      child: const Text("ابدأ توليد وحفظ أوراق الاختبار (PDF)", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                      child: const Text(
+                        "ابدأ توليد وحفظ أوراق الاختبار (PDF)",
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
                     ),
-            ],
-          ),
+          ],
         ),
       ),
     );
