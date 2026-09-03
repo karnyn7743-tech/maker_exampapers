@@ -8,7 +8,6 @@ import 'package:path_provider/path_provider.dart';
 
 class PdfGeneratorService {
   
-  /// الحصول على مسار حفظ الملفات في المجلد العام (Download/درجات الطلاب)
   static Future<String> _getPublicFolderPath() async {
     Directory? externalDir = await getExternalStorageDirectory();
     String newPath = "";
@@ -29,7 +28,6 @@ class PdfGeneratorService {
     return targetDir.path;
   }
 
-  /// الدالة الرئيسية والآمنة التي تستدعي الـ Isolate بدون تمرير كائنات معقدة
   static Future<String> generatePapersInIsolate({
     required String excelPath,       
     required String qrFolderPath,    
@@ -39,15 +37,12 @@ class PdfGeneratorService {
   }) async {
     
     final String folderPath = await _getPublicFolderPath();
-    final Uint8List fontBytes = fontData.buffer.asUint8List();
 
-    // تشغيل العمليات الثقيلة (قراءة الأكسيل وفحص الصور) في الخلفية
     final Map<String, dynamic> result = await compute(_heavyPdfGenerationTask, {
       'excelPath': excelPath,
       'qrFolderPath': qrFolderPath,
       'selectedClass': selectedClass,
       'selectedSubject': selectedSubject,
-      'fontBytes': fontBytes,
     });
 
     if (result['success'] == false) {
@@ -62,7 +57,8 @@ class PdfGeneratorService {
     }
 
     final pdf = pw.Document();
-    final ttfFont = pw.Font.ttf(fontBytes.buffer.asByteData());
+    // تحميل الخط كـ TtfWithFallback لضمان دعم كافة الحروف
+    final ttfFont = pw.Font.ttf(fontData);
 
     for (var student in studentsList) {
       pw.MemoryImage? qrImageProvider;
@@ -81,7 +77,7 @@ class PdfGeneratorService {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                 children: [
-                  // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
+                  // ---- الهيدر العلوي ----
                   pw.Container(
                     decoration: pw.BoxDecoration(
                       border: pw.Border.all(color: PdfColors.black, width: 1.2),
@@ -90,61 +86,63 @@ class PdfGeneratorService {
                     child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                        pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                        pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                        pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                   ),
 
                   pw.Spacer(), 
 
-                  // ---- الفوتر السفلي جهة اليسار ----
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.start,
-                    crossAxisAlignment: pw.CrossAxisAlignment.end,
-                    children: [
-                      // المربع 1: رقم المادة الترتيبي
-                      pw.Container(
-                        width: 45,
-                        height: 45,
-                        alignment: pw.Alignment.center,
-                        decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: PdfColors.black, width: 1.5),
+                  // ---- الفوتر السفلي (تم ضبطه ليجبر المحاذاة لأقصى اليسار) ----
+                  pw.Directionality(
+                    textDirection: pw.TextDirection.ltr, // المحاذاة من اليسار لليمين
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.start,
+                      children: [
+                        // المربع 1: المربع الأزرق الفارغ
+                        pw.Container(
+                          width: 45,
+                          height: 45,
+                          decoration: pw.BoxDecoration(
+                            color: const PdfColor.fromInt(0xFFE3F2FD), 
+                            border: pw.Border.all(color: PdfColors.black, width: 1.2),
+                          ),
                         ),
-                        child: pw.Text(
-                          selectedSubject,
-                          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-                        ),
-                      ),
-                      pw.SizedBox(width: 15),
+                        pw.SizedBox(width: 15),
 
-                      // المربع 2: صورة الـ QR Code المستوردة أو توليد تلقائي احتياطي
-                      pw.Container(
-                        width: 45,
-                        height: 45,
-                        decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: PdfColors.black, width: 1.2),
+                        // المربع 2: صورة الـ QR Code
+                        pw.Container(
+                          width: 45,
+                          height: 45,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: PdfColors.black, width: 1.2),
+                          ),
+                          child: qrImageProvider != null
+                              ? pw.Image(qrImageProvider, fit: pw.BoxFit.fill)
+                              : pw.BarcodeWidget( 
+                                  barcode: pw.Barcode.qrCode(),
+                                  data: student['qrData']!,
+                                  drawText: false,
+                                ),
                         ),
-                        child: qrImageProvider != null
-                            ? pw.Image(qrImageProvider, fit: pw.BoxFit.fill)
-                            : pw.BarcodeWidget( 
-                                barcode: pw.Barcode.qrCode(),
-                                data: student['qrData']!,
-                                drawText: false,
-                              ),
-                      ),
-                      pw.SizedBox(width: 15),
+                        pw.SizedBox(width: 15),
 
-                      // المربع 3: المربع الفارغ الملون بالأزرق الفاتح جداً
-                      pw.Container(
-                        width: 45,
-                        height: 45,
-                        decoration: pw.BoxDecoration(
-                          color: const PdfColor.fromInt(0xFFE3F2FD), 
-                          border: pw.Border.all(color: PdfColors.black, width: 1.2),
+                        // المربع 3: رقم المادة
+                        pw.Container(
+                          width: 45,
+                          height: 45,
+                          alignment: pw.Alignment.center,
+                          decoration: pw.BoxDecoration(
+                            border: pw.Border.all(color: PdfColors.black, width: 1.5),
+                          ),
+                          child: pw.Text(
+                            selectedSubject,
+                            style: pw.TextStyle(font: ttfFont, fontSize: 16, fontWeight: pw.FontWeight.bold),
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -163,7 +161,6 @@ class PdfGeneratorService {
     return finalFilePath;
   }
 
-  /// دالة الخلفية (Isolate Thread) مع حلقة تكرار آمنة ومحمية من اللوب اللانهائي
   static Map<String, dynamic> _heavyPdfGenerationTask(Map<String, dynamic> params) {
     try {
       final String excelPath = params['excelPath'];
@@ -198,7 +195,6 @@ class PdfGeneratorService {
         String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
         String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
 
-        // التوقف عند الأسطر الفارغة لتفادي التعليق
         if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
           break; 
         }
