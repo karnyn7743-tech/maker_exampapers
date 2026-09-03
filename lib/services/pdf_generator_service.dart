@@ -31,10 +31,10 @@ class PdfGeneratorService {
 
   /// الدالة الرئيسية والآمنة التي تستدعي الـ Isolate بدون تمرير كائنات معقدة
   static Future<String> generatePapersInIsolate({
-    required String excelPath,       // تم التغيير لـ String لمنع التعليق
-    required String qrFolderPath,    // مسار مجلد صور الـ QR المكتشف
+    required String excelPath,       
+    required String qrFolderPath,    
     required String selectedClass,
-    required String selectedSubject, // ترتيب المادة كـ String (مثلاً "1")
+    required String selectedSubject, 
     required ByteData fontData,
   }) async {
     
@@ -61,7 +61,6 @@ class PdfGeneratorService {
       throw Exception("لا يوجد طلاب مسجلين في هذا الصف المختار!");
     }
 
-    // بناء وتجميع مستند الـ PDF بناءً على البيانات الخفيفة المجهزة في الخلفية
     final pdf = pw.Document();
     final ttfFont = pw.Font.ttf(fontBytes.buffer.asByteData());
 
@@ -78,13 +77,16 @@ class PdfGeneratorService {
           theme: pw.ThemeData.withFont(base: ttfFont),
           build: (pw.Context context) {
             return pw.Directionality(
-              textDirection: pw.TextDirection.rtl, // توجيه المحتوى العربي
+              textDirection: pw.TextDirection.rtl, 
               child: pw.Column(
-                cross: pw.CrossAxisAlignment.stretch,
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch, // ✅ تم تعديل الاسم هنا من cross إلى crossAxisAlignment
                 children: [
                   // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
-                    border: pw.Border.all(color: PdfColors.black, width: 1.2),
+                    // ✅ تم نقل الـ border إلى داخل الـ BoxDecoration لحل مشكلة حاوية المستند
+                    decoration: pw.BoxDecoration(
+                      border: pw.Border.all(color: PdfColors.black, width: 1.2),
+                    ),
                     padding: const pw.EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                     child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
@@ -95,9 +97,9 @@ class PdfGeneratorService {
                     ),
                   ),
 
-                  pw.Spacer(), // دفع الفوتر إلى أسفل الورقة تماماً
+                  pw.Spacer(), 
 
-                  // ---- الفوتر السفلي جهة اليسار (يبدأ من اليمين في كود فلاتر ويتحول لليسار بسبب RTL) ----
+                  // ---- الفوتر السفلي جهة اليسار ----
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.start,
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -139,7 +141,7 @@ class PdfGeneratorService {
                         width: 45,
                         height: 45,
                         decoration: pw.BoxDecoration(
-                          color: const PdfColor.fromInt(0xFFE3F2FD), // لون أزرق فاتح جداً مطبق للصورة
+                          color: const PdfColor.fromInt(0xFFE3F2FD), 
                           border: pw.Border.all(color: PdfColors.black, width: 1.2),
                         ),
                       ),
@@ -170,7 +172,6 @@ class PdfGeneratorService {
       final String selectedClass = params['selectedClass'];
       final String selectedSubject = params['selectedSubject'];
 
-      // فتح وفك ملف الأكسيل بالكامل في الخلفية لحماية الواجهة
       var bytes = File(excelPath).readAsBytesSync();
       var excel = Excel.decodeBytes(bytes);
       String sheetName = excel.tables.keys.first;
@@ -179,7 +180,6 @@ class PdfGeneratorService {
       List<Map<String, dynamic>> studentsList = [];
       String subjectNameString = "مادة_$selectedSubject";
 
-      // الأعمدة تبدأ من e (الفهرس 4) للمادة 1 وحتى s (الفهرس 18) للمادة 15
       int targetSubjectColumn = 4 + (int.parse(selectedSubject) - 1);
 
       if (sheet.maxRows > 0 && targetSubjectColumn < sheet.maxColumns) {
@@ -193,17 +193,16 @@ class PdfGeneratorService {
         var row = sheet.rows[i];
         if (row.isEmpty) continue;
 
-        String seatNumber = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : ""; // العمود A
-        String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول"; // العمود B
-        String className = row.length > 2 && row[2]?.value != null ? row[2]!.value.toString().trim() : ""; // العمود C
+        String seatNumber = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : ""; 
+        String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول"; 
+        String className = row.length > 2 && row[2]?.value != null ? row[2]!.value.toString().trim() : ""; 
 
         if (className != selectedClass || seatNumber.isEmpty) continue;
 
-        // جلب بايتات صورة الـ QR من مجلد qr_pict بناءً على رقم الجلوس
         Uint8List? qrImageBytes;
         File qrFile = File("$qrFolderPath/$seatNumber.png");
         if (!qrFile.existsSync()) {
-          qrFile = File("$qrFolderPath/$seatNumber.jpg"); // تجربة امتداد jpg احتياطاً
+          qrFile = File("$qrFolderPath/$seatNumber.jpg"); 
         }
 
         if (qrFile.existsSync()) {
