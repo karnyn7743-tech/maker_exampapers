@@ -79,7 +79,7 @@ class PdfGeneratorService {
             return pw.Directionality(
               textDirection: pw.TextDirection.rtl, 
               child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.stretch, // ✅ تم تعديلها هنا بدقة لتلافي خطأ البناء
+                cross: pw.CrossAxisAlignment.stretch, 
                 children: [
                   // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
@@ -188,18 +188,18 @@ class PdfGeneratorService {
         }
       }
 
-      // حلقة تكرار آمنة لحل مشكلة التعليق اللانهائي عند تصفية الأسطر
       int rowsCount = sheet.rows.length;
       for (int i = 1; i < rowsCount; i++) {
         var row = sheet.rows[i];
         
         if (row == null || row.isEmpty) continue;
 
+        // قراءة آمنة تمنع التعليق والـ Null Reference
         String seatNumber = (row.length > 0 && row[0]?.value != null) ? row[0]!.value.toString().trim() : ""; 
         String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
         String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
 
-        // التوقف الفوري عند بلوغ نهاية خلايا البيانات لتفادي التعليق
+        // 🏆 شرط الأمان: التوقف الفوري عند بلوغ نهاية أسطر البيانات الحقيقية وتفادي الخلايا الفارغة المنسقة
         if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
           break; 
         }
