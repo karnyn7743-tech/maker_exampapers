@@ -79,7 +79,7 @@ class PdfGeneratorService {
             return pw.Directionality(
               textDirection: pw.TextDirection.rtl, 
               child: pw.Column(
-                cross: pw.CrossAxisAlignment.stretch,
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch, // ✅ تم تعديلها هنا بدقة لتلافي خطأ البناء
                 children: [
                   // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
@@ -188,19 +188,18 @@ class PdfGeneratorService {
         }
       }
 
-      // تعديل حلقة التكرار هنا لتصبح قائمة على العناصر الفعلية لحل مشكلة التعليق اللانهائي
+      // حلقة تكرار آمنة لحل مشكلة التعليق اللانهائي عند تصفية الأسطر
       int rowsCount = sheet.rows.length;
       for (int i = 1; i < rowsCount; i++) {
         var row = sheet.rows[i];
         
-        // إذا كان السطر فارغاً تماماً أو لا يحتوي على خلايا، نتحقق من التوقف
         if (row == null || row.isEmpty) continue;
 
         String seatNumber = (row.length > 0 && row[0]?.value != null) ? row[0]!.value.toString().trim() : ""; 
         String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
         String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
 
-        // إذا وصلنا إلى أسطر فارغة تماماً في نهاية الملف المنسق، نكسر الحلقة فوراً
+        // التوقف الفوري عند بلوغ نهاية خلايا البيانات لتفادي التعليق
         if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
           break; 
         }
