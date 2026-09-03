@@ -33,24 +33,31 @@ class PdfGeneratorService {
     required String selectedSubject,
     required ByteData fontData,
   }) async {
+    // تحويل الأكسيل والخط إلى Uint8List لضمان سهولة نقلها عبر الـ Isolate
+    final Uint8List excelBytes = Uint8List.fromList(excelData.encode() ?? []);
+    final Uint8List fontBytes = fontData.buffer.asUint8List();
+    final String targetPath = (await _getPublicDirectory()).path;
+
     return compute(_generateProcess, {
-      'excelData': excelData,
+      'excelBytes': excelBytes,
       'selectedClass': selectedClass,
       'selectedSubject': selectedSubject,
-      'fontByteData': fontData,
-      'targetFolderPath': (await _getPublicDirectory()).path,
+      'fontBytes': fontBytes,
+      'targetFolderPath': targetPath,
     });
   }
 
   static Future<String> _generateProcess(Map<String, dynamic> params) async {
-    final Excel excelData = params['excelData'];
+    final Uint8List excelBytes = params['excelBytes'];
     final String selectedClass = params['selectedClass'];
     final String selectedSubject = params['selectedSubject'];
-    final ByteData fontByteData = params['fontByteData'];
+    final Uint8List fontBytes = params['fontBytes'];
     final String targetFolderPath = params['targetFolderPath'];
 
+    // إعادة فك ملف الأكسيل والخط داخل الـ Isolate المستقل
+    final Excel excelData = Excel.decodeBytes(excelBytes);
     final pdf = pw.Document();
-    final ttfFont = pw.Font.ttf(fontByteData);
+    final ttfFont = pw.Font.ttf(fontBytes.buffer.asByteData());
 
     String sheetName = excelData.tables.keys.first;
     var sheet = excelData.tables[sheetName]!;
@@ -70,15 +77,10 @@ class PdfGeneratorService {
       var row = sheet.rows[i];
       if (row.isEmpty) continue;
 
-      // قراءة البيانات من الأعمدة المحددة
-      // العمود A (0): رقم القيد
-      // العمود B (1): اسم الطالب
-      // العمود D (3): الرقم السري
       String studentId = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : "";
       String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول";
       String secretCode = row.length > 3 && row[3]?.value != null ? row[3]!.value.toString().trim() : "";
 
-      // الأولوية للرقم السري (العمود D)، وإذا كان فارغاً يتم الاعتماد على رقم القيد (العمود A)
       String qrData = secretCode.isNotEmpty ? secretCode : studentId;
 
       if (qrData.isEmpty) continue;
@@ -117,7 +119,7 @@ class PdfGeneratorService {
 
                     pw.Spacer(),
 
-                    // أسفل الورقة: مربع المادة - توليد الـ QR بالرقم السري - مربع الدرجة
+                    // أسفل الورقة
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       crossAxisAlignment: pw.CrossAxisAlignment.end,
@@ -140,7 +142,7 @@ class PdfGeneratorService {
                             ),
                             pw.SizedBox(width: 10),
 
-                            // توليد رمز الـ QR بالرقم السري (العمود D) مباشرة
+                            // رمز ה-QR
                             pw.Container(
                               width: 45,
                               height: 45,
@@ -156,7 +158,7 @@ class PdfGeneratorService {
                             ),
                             pw.SizedBox(width: 10),
 
-                            // مربع إدخال الدرجة الشفاف
+                            // مربع إدخال الدرجة
                             pw.Container(
                               width: 40,
                               height: 40,
