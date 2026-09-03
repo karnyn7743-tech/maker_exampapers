@@ -8,7 +8,7 @@ import 'package:path_provider/path_provider.dart';
 
 class PdfGeneratorService {
   
-  /// الحصول على المسار المباشر لحفظ الملف (تتم في Main Thread)
+  /// الحصول على مسار حفظ الملفات في المجلد العام (Download/درجات الطلاب)
   static Future<String> _getPublicFolderPath() async {
     Directory? externalDir = await getExternalStorageDirectory();
     String newPath = "";
@@ -29,22 +29,19 @@ class PdfGeneratorService {
     return targetDir.path;
   }
 
-  /// الدالة الرئيسية والوحيدة الآمنة للاستدعاء من الهوم سكرين
+  /// الدالة الرئيسية والآمنة التي تستدعي الـ Isolate بدون تمرير كائنات معقدة
   static Future<String> generatePapersInIsolate({
-    required String excelPath,       // تم تغييرها إلى مسار نصي لحماية الذاكرة
-    required String qrFolderPath,    // مسار مجلد صور الـ QR المختار
+    required String excelPath,       // تم التغيير لـ String لمنع التعليق
+    required String qrFolderPath,    // مسار مجلد صور الـ QR المكتشف
     required String selectedClass,
-    required String selectedSubject, // رقم المادة (من 1 إلى 15)
+    required String selectedSubject, // ترتيب المادة كـ String (مثلاً "1")
+    required ByteData fontData,
   }) async {
     
-    // 1. استخراج مسار الحفظ والخط في الـ Main Thread
     final String folderPath = await _getPublicFolderPath();
-    
-    // تحميل الخط العربي كبايتات صريحة لتمريرها بأمان للـ Isolate
-    final ByteData fontData = await rootBundle.load("assets/fonts/HacenTunisia.ttf"); // استبدله باسم ملف الخط لديك
     final Uint8List fontBytes = fontData.buffer.asUint8List();
 
-    // 2. تشغيل التوليد بالكامل (قراءة، تصفية، وبناء الـ PDF) في خيط معزول تماماً
+    // تشغيل العمليات الثقيلة (قراءة الأكسيل وفحص الصور ورسم بايتات المستند) في الخلفية
     final Map<String, dynamic> result = await compute(_heavyPdfGenerationTask, {
       'excelPath': excelPath,
       'qrFolderPath': qrFolderPath,
@@ -60,17 +57,15 @@ class PdfGeneratorService {
     final List<Map<String, dynamic>> studentsList = List<Map<String, dynamic>>.from(result['studentsList']);
     final String subjectNameString = result['subjectNameString'];
 
-    // في حال عدم وجود طلاب مطابقين للمعيار المختار
     if (studentsList.isEmpty) {
       throw Exception("لا يوجد طلاب مسجلين في هذا الصف المختار!");
     }
 
-    // 3. بناء وتوليد الـ PDF من بايتات المستند التي تم إعدادها بالخلفية
+    // بناء وتجميع مستند الـ PDF بناءً على البيانات الخفيفة المجهزة في الخلفية
     final pdf = pw.Document();
     final ttfFont = pw.Font.ttf(fontBytes.buffer.asByteData());
 
     for (var student in studentsList) {
-      // قراءة صورة الـ QR كبايتات إذا كانت موجودة، وإلا نعتمد على دالة الرسم التلقائية كبديل آمن
       pw.MemoryImage? qrImageProvider;
       if (student['qrImageBytes'] != null) {
         qrImageProvider = pw.MemoryImage(student['qrImageBytes'] as Uint8List);
@@ -79,59 +74,59 @@ class PdfGeneratorService {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(30),
+          margin: const pw.EdgeInsets.all(35),
           theme: pw.ThemeData.withFont(base: ttfFont),
           build: (pw.Context context) {
             return pw.Directionality(
-              textDirection: pw.TextDirection.rtl, // دعم التوجيه العربي الصحيح
+              textDirection: pw.TextDirection.rtl, // توجيه المحتوى العربي
               child: pw.Column(
                 cross: pw.CrossAxisAlignment.stretch,
                 children: [
-                  // ---- الهيدر العلوي الممتد بحسب الصورة المرسلة ----
+                  // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
                     border: pw.Border.all(color: PdfColors.black, width: 1.2),
                     padding: const pw.EdgeInsets.symmetric(horizontal: 15, vertical: 10),
                     child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                       children: [
-                        pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
-                        pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                        pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                        pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
                       ],
                     ),
                   ),
 
-                  pw.Spacer(), // دفع الفوتر إلى نهاية الصفحة تماماً
+                  pw.Spacer(), // دفع الفوتر إلى أسفل الورقة تماماً
 
-                  // ---- الفوتر السفلي (يبدأ من اليسار بفضل الـ RTL) ----
+                  // ---- الفوتر السفلي جهة اليسار (يبدأ من اليمين في كود فلاتر ويتحول لليسار بسبب RTL) ----
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.start,
                     crossAxisAlignment: pw.CrossAxisAlignment.end,
                     children: [
-                      // المربع 1: رقم المادة
+                      // المربع 1: رقم المادة الترتيبي
                       pw.Container(
-                        width: 50,
-                        height: 50,
+                        width: 45,
+                        height: 45,
                         alignment: pw.Alignment.center,
                         decoration: pw.BoxDecoration(
                           border: pw.Border.all(color: PdfColors.black, width: 1.5),
                         ),
                         child: pw.Text(
                           selectedSubject,
-                          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+                          style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
                         ),
                       ),
                       pw.SizedBox(width: 15),
 
-                      // المربع 2: رمز الاستجابة السريع QR Code المجلوب من المجلد
+                      // المربع 2: صورة الـ QR Code المستوردة أو توليد تلقائي احتياطي
                       pw.Container(
-                        width: 50,
-                        height: 50,
+                        width: 45,
+                        height: 45,
                         decoration: pw.BoxDecoration(
                           border: pw.Border.all(color: PdfColors.black, width: 1.2),
                         ),
                         child: qrImageProvider != null
                             ? pw.Image(qrImageProvider, fit: pw.BoxFit.fill)
-                            : pw.BarcodeWidget( // حل بديل في حال فقدان الصورة من المجلد
+                            : pw.BarcodeWidget( 
                                 barcode: pw.Barcode.qrCode(),
                                 data: student['qrData']!,
                                 drawText: false,
@@ -141,10 +136,10 @@ class PdfGeneratorService {
 
                       // المربع 3: المربع الفارغ الملون بالأزرق الفاتح جداً
                       pw.Container(
-                        width: 50,
-                        height: 50,
+                        width: 45,
+                        height: 45,
                         decoration: pw.BoxDecoration(
-                          color: const PdfColor.fromInt(0xFFE3F2FD), // لون أزرق فاتح جداً مطابق للصورة
+                          color: const PdfColor.fromInt(0xFFE3F2FD), // لون أزرق فاتح جداً مطبق للصورة
                           border: pw.Border.all(color: PdfColors.black, width: 1.2),
                         ),
                       ),
@@ -158,7 +153,6 @@ class PdfGeneratorService {
       );
     }
 
-    // 4. حفظ وتسمية ملف الـ PDF النهائي في المجلد المخصص
     final String cleanSubject = subjectNameString.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
     final String finalFilePath = "$folderPath/امتحانات_${selectedClass}_$cleanSubject.pdf";
     
@@ -168,7 +162,7 @@ class PdfGeneratorService {
     return finalFilePath;
   }
 
-  /// هذه الدالة تنفذ بالكامل في الخلفية المعزولة (Isolate Background) لتقرأ الأكسيل وتجهز مصفوفة الطلاب دون حظر الـ UI
+  /// دالة الخلفية (Isolate Thread)
   static Map<String, dynamic> _heavyPdfGenerationTask(Map<String, dynamic> params) {
     try {
       final String excelPath = params['excelPath'];
@@ -176,7 +170,7 @@ class PdfGeneratorService {
       final String selectedClass = params['selectedClass'];
       final String selectedSubject = params['selectedSubject'];
 
-      // قراءة ملف الأكسيل بأمان داخل الخلفية
+      // فتح وفك ملف الأكسيل بالكامل في الخلفية لحماية الواجهة
       var bytes = File(excelPath).readAsBytesSync();
       var excel = Excel.decodeBytes(bytes);
       String sheetName = excel.tables.keys.first;
@@ -185,8 +179,7 @@ class PdfGeneratorService {
       List<Map<String, dynamic>> studentsList = [];
       String subjectNameString = "مادة_$selectedSubject";
 
-      // حساب رقم عمود المادة (المواد تبدأ من العمود e وهو الفهرس 4)
-      // المعادلة: الفهرس = 4 + (رقم المادة - 1)
+      // الأعمدة تبدأ من e (الفهرس 4) للمادة 1 وحتى s (الفهرس 18) للمادة 15
       int targetSubjectColumn = 4 + (int.parse(selectedSubject) - 1);
 
       if (sheet.maxRows > 0 && targetSubjectColumn < sheet.maxColumns) {
@@ -196,24 +189,21 @@ class PdfGeneratorService {
         }
       }
 
-      // معالجة وحصر الطلاب المطابقين للشروط
       for (int i = 1; i < sheet.maxRows; i++) {
         var row = sheet.rows[i];
         if (row.isEmpty) continue;
 
-        // استخراج البيانات بحسب تحديد الأعمدة المطلوبة
-        String seatNumber = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : ""; // العمود A (رقم الجلوس)
+        String seatNumber = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : ""; // العمود A
         String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول"; // العمود B
-        String className = row.length > 2 && row[2]?.value != null ? row[2]!.value.toString().trim() : ""; // العمود C (الصف)
+        String className = row.length > 2 && row[2]?.value != null ? row[2]!.value.toString().trim() : ""; // العمود C
 
-        // التحقق من شرط الصف المختار وتوفر رقم الجلوس
         if (className != selectedClass || seatNumber.isEmpty) continue;
 
-        // محاولة جلب بايتات صورة الـ QR من المجلد المخصص
+        // جلب بايتات صورة الـ QR من مجلد qr_pict بناءً على رقم الجلوس
         Uint8List? qrImageBytes;
         File qrFile = File("$qrFolderPath/$seatNumber.png");
         if (!qrFile.existsSync()) {
-          qrFile = File("$qrFolderPath/$seatNumber.jpg"); // تجربة امتداد آخر
+          qrFile = File("$qrFolderPath/$seatNumber.jpg"); // تجربة امتداد jpg احتياطاً
         }
 
         if (qrFile.existsSync()) {
