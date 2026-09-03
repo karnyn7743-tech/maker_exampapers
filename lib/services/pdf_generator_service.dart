@@ -79,11 +79,10 @@ class PdfGeneratorService {
             return pw.Directionality(
               textDirection: pw.TextDirection.rtl, 
               child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.stretch, // ✅ تم تعديل الاسم هنا من cross إلى crossAxisAlignment
+                cross: pw.CrossAxisAlignment.stretch,
                 children: [
                   // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
-                    // ✅ تم نقل الـ border إلى داخل الـ BoxDecoration لحل مشكلة حاوية المستند
                     decoration: pw.BoxDecoration(
                       border: pw.Border.all(color: PdfColors.black, width: 1.2),
                     ),
@@ -164,7 +163,7 @@ class PdfGeneratorService {
     return finalFilePath;
   }
 
-  /// دالة الخلفية (Isolate Thread)
+  /// دالة الخلفية (Isolate Thread) مع حلقة تكرار آمنة ومحمية من اللوب اللانهائي
   static Map<String, dynamic> _heavyPdfGenerationTask(Map<String, dynamic> params) {
     try {
       final String excelPath = params['excelPath'];
@@ -189,13 +188,22 @@ class PdfGeneratorService {
         }
       }
 
-      for (int i = 1; i < sheet.maxRows; i++) {
+      // تعديل حلقة التكرار هنا لتصبح قائمة على العناصر الفعلية لحل مشكلة التعليق اللانهائي
+      int rowsCount = sheet.rows.length;
+      for (int i = 1; i < rowsCount; i++) {
         var row = sheet.rows[i];
-        if (row.isEmpty) continue;
+        
+        // إذا كان السطر فارغاً تماماً أو لا يحتوي على خلايا، نتحقق من التوقف
+        if (row == null || row.isEmpty) continue;
 
-        String seatNumber = row.length > 0 && row[0]?.value != null ? row[0]!.value.toString().trim() : ""; 
-        String studentName = row.length > 1 && row[1]?.value != null ? row[1]!.value.toString().trim() : "طالب مجهول"; 
-        String className = row.length > 2 && row[2]?.value != null ? row[2]!.value.toString().trim() : ""; 
+        String seatNumber = (row.length > 0 && row[0]?.value != null) ? row[0]!.value.toString().trim() : ""; 
+        String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
+        String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
+
+        // إذا وصلنا إلى أسطر فارغة تماماً في نهاية الملف المنسق، نكسر الحلقة فوراً
+        if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
+          break; 
+        }
 
         if (className != selectedClass || seatNumber.isEmpty) continue;
 
