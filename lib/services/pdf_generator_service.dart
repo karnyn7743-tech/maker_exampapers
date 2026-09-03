@@ -7,7 +7,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 
 class PdfGeneratorService {
-  static Future<Directory> _getPublicDirectory() async {
+  /// الحصول على المسار المباشر (تتم في Main Thread حصراً)
+  static Future<String> _getPublicFolderPath() async {
     Directory? externalDir = await getExternalStorageDirectory();
     String newPath = "";
     List<String> paths = externalDir!.path.split("/");
@@ -24,7 +25,7 @@ class PdfGeneratorService {
     if (!await targetDir.exists()) {
       await targetDir.create(recursive: true);
     }
-    return targetDir;
+    return targetDir.path;
   }
 
   static Future<String> generatePapersInIsolate({
@@ -33,36 +34,16 @@ class PdfGeneratorService {
     required String selectedSubject,
     required ByteData fontData,
   }) async {
-    // تحويل الأكسيل والخط إلى Uint8List لضمان سهولة نقلها عبر الـ Isolate
-    final Uint8List excelBytes = Uint8List.fromList(excelData.encode() ?? []);
-    final Uint8List fontBytes = fontData.buffer.asUint8List();
-    final String targetPath = (await _getPublicDirectory()).path;
+    // 1. استخراج المسار الأساسي في Main Thread لتجنب الانهيار الصامت للـ Isolate
+    final String folderPath = await _getPublicFolderPath();
 
-    return compute(_generateProcess, {
-      'excelBytes': excelBytes,
-      'selectedClass': selectedClass,
-      'selectedSubject': selectedSubject,
-      'fontBytes': fontBytes,
-      'targetFolderPath': targetPath,
-    });
-  }
-
-  static Future<String> _generateProcess(Map<String, dynamic> params) async {
-    final Uint8List excelBytes = params['excelBytes'];
-    final String selectedClass = params['selectedClass'];
-    final String selectedSubject = params['selectedSubject'];
-    final Uint8List fontBytes = params['fontBytes'];
-    final String targetFolderPath = params['targetFolderPath'];
-
-    // إعادة فك ملف الأكسيل والخط داخل الـ Isolate المستقل
-    final Excel excelData = Excel.decodeBytes(excelBytes);
-    final pdf = pw.Document();
-    final ttfFont = pw.Font.ttf(fontBytes.buffer.asByteData());
-
+    // 2. قراءة بيانات الأكسيل كنصوص خفيفة جداً بدلاً من إرسال كائنات معقدة
     String sheetName = excelData.tables.keys.first;
     var sheet = excelData.tables[sheetName]!;
 
+    List<Map<String, String>> studentsList = [];
     String subjectNameString = "مادة_$selectedSubject";
+
     try {
       int colIndex = int.parse(selectedSubject) + 3;
       if (sheet.maxRows > 0 && colIndex < sheet.maxColumns) {
@@ -82,9 +63,42 @@ class PdfGeneratorService {
       String secretCode = row.length > 3 && row[3]?.value != null ? row[3]!.value.toString().trim() : "";
 
       String qrData = secretCode.isNotEmpty ? secretCode : studentId;
-
       if (qrData.isEmpty) continue;
 
+      studentsList.add({
+        'studentId': studentId,
+        'studentName': studentName,
+        'qrData': qrData,
+      });
+    }
+
+    final String cleanSubject = subjectNameString.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+    final String finalFilePath = "$folderPath/امتحانات_${selectedClass}_$cleanSubject.pdf";
+
+    // 3. إرسال بيانات نصية وبايتات صريحة فقط للـ Isolate
+    final Uint8List pdfBytes = await compute(_generatePdfBytes, {
+      'studentsList': studentsList,
+      'selectedSubject': selectedSubject,
+      'fontBytes': fontData.buffer.asUint8List(),
+    });
+
+    // 4. كتابة الملف وحفظه على القرص يتم في Main Thread
+    final file = File(finalFilePath);
+    await file.writeAsBytes(pdfBytes, flush: true);
+
+    return finalFilePath;
+  }
+
+  /// دالة توليد البايتات فقط داخل الـ Isolate
+  static Future<Uint8List> _generatePdfBytes(Map<String, dynamic> params) async {
+    final List<Map<String, String>> studentsList = List<Map<String, String>>.from(params['studentsList']);
+    final String selectedSubject = params['selectedSubject'];
+    final Uint8List fontBytes = params['fontBytes'];
+
+    final pdf = pw.Document();
+    final ttfFont = pw.Font.ttf(fontBytes.buffer.asByteData());
+
+    for (var student in studentsList) {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
@@ -97,7 +111,7 @@ class PdfGeneratorService {
                 child: pw.Column(
                   mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                   children: [
-                    // أعلى الورقة: بيانات الطالب
+                    // أعلى الورقة
                     pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       children: [
@@ -108,9 +122,9 @@ class PdfGeneratorService {
                           ),
                           child: pw.Row(
                             children: [
-                              pw.Text("اسم الطالب: $studentName", style: const pw.TextStyle(fontSize: 12)),
+                              pw.Text("اسم الطالب: ${student['studentName']}", style: const pw.TextStyle(fontSize: 12)),
                               pw.SizedBox(width: 20),
-                              pw.Text("رقم القيد: $studentId", style: const pw.TextStyle(fontSize: 12)),
+                              pw.Text("رقم القيد: ${student['studentId']}", style: const pw.TextStyle(fontSize: 12)),
                             ],
                           ),
                         ),
@@ -127,7 +141,6 @@ class PdfGeneratorService {
                         pw.Row(
                           crossAxisAlignment: pw.CrossAxisAlignment.end,
                           children: [
-                            // مربع المادة
                             pw.Container(
                               width: 40,
                               height: 40,
@@ -142,7 +155,6 @@ class PdfGeneratorService {
                             ),
                             pw.SizedBox(width: 10),
 
-                            // رمز ה-QR
                             pw.Container(
                               width: 45,
                               height: 45,
@@ -152,13 +164,12 @@ class PdfGeneratorService {
                               ),
                               child: pw.BarcodeWidget(
                                 barcode: pw.Barcode.qrCode(),
-                                data: qrData,
+                                data: student['qrData']!,
                                 drawText: false,
                               ),
                             ),
                             pw.SizedBox(width: 10),
 
-                            // مربع إدخال الدرجة
                             pw.Container(
                               width: 40,
                               height: 40,
@@ -181,13 +192,6 @@ class PdfGeneratorService {
       );
     }
 
-    final String cleanSubject = subjectNameString.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
-    final String finalFilePath = "$targetFolderPath/امتحانات_${selectedClass}_$cleanSubject.pdf";
-
-    final file = File(finalFilePath);
-    final bytes = await pdf.save();
-    await file.writeAsBytes(bytes, flush: true);
-
-    return finalFilePath;
+    return await pdf.save();
   }
 }
