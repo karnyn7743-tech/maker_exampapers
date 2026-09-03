@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:excel/excel.dart' hide Border; // تجنب التضارب مع Flutter Border
+import 'package:excel/excel.dart' hide Border;
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:path_provider/path_provider.dart';
@@ -15,26 +15,16 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  Excel? _excelData;
   String? _excelPath;
+  String? _qrFolderPath; // حفظ مسار مجلد صور الـ QR تلقائياً
 
   final List<String> _classes = [
-    "ثالث",
-    "رابع",
-    "خامس",
-    "سادس",
-    "سابع",
-    "ثامن",
-    "تاسع",
-    "أول ثانوي",
-    "ثاني ثانوي",
-    "ثالث ثانوي"
+    "ثالث", "رابع", "خامس", "سادس", "سابع", "ثامن", "تاسع", "أول ثانوي", "ثاني ثانوي", "ثالث ثانوي"
   ];
   String? _selectedClass;
 
   List<String> _subjects = [];
   String? _selectedSubject;
-
   bool _isGenerating = false;
 
   @override
@@ -48,7 +38,6 @@ class _HomeScreenState extends State<HomeScreen> {
     await Permission.manageExternalStorage.request();
   }
 
-  /// الحصول على المسار المباشر لمجلد (Download/درجات الطلاب)
   Future<Directory> _getPublicDirectory() async {
     Directory? externalDir = await getExternalStorageDirectory();
     String newPath = "";
@@ -56,7 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
     for (int x = 1; x < paths.length; x++) {
       String folder = paths[x];
       if (folder != "Android") {
-        newPath += "/" + folder;
+        newPath += "/$folder";
       } else {
         break;
       }
@@ -87,6 +76,11 @@ class _HomeScreenState extends State<HomeScreen> {
         await destinationFile.writeAsBytes(sourceBytes, flush: true);
       }
 
+      // البحث التلقائي واستخراج مسار مجلد qr_pict بجانب ملف الأكسيل الأصلي المختار
+      final File originalFile = File(cachePath);
+      final String parentDirPath = originalFile.parent.path;
+      final String detectedQrPath = "$parentDirPath/qr_pict";
+
       var bytes = await destinationFile.readAsBytes();
       var excel = Excel.decodeBytes(bytes);
       String sheetName = excel.tables.keys.first;
@@ -108,14 +102,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _excelPath = destinationFile.path;
-        _excelData = excel;
+        _qrFolderPath = detectedQrPath; // تخزين مسار المجلد للـ QR
         _subjects = extractedSubjects;
         _selectedSubject = null;
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("تم تحميل ملف الأكسيل بنجاح", textAlign: TextAlign.center),
+          content: Text("تم تحميل ملف الأكسيل بنجاح وجلب مسار الصور", textAlign: TextAlign.center),
           backgroundColor: Colors.green,
         ),
       );
@@ -123,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _startPdfGeneration() async {
-    if (_excelData == null || _selectedClass == null || _selectedSubject == null) {
+    if (_excelPath == null || _selectedClass == null || _selectedSubject == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text("الرجاء إدخال واختيار جميع البيانات المطلوبة", textAlign: TextAlign.center),
@@ -141,8 +135,10 @@ class _HomeScreenState extends State<HomeScreen> {
       int subjectOrderNumber = _subjects.indexOf(_selectedSubject!) + 1;
       final fontData = await rootBundle.load("assets/fonts/Amiri_Regular.ttf");
 
+      // تمرير مسارات النصوص (String Paths) الآمنة تماماً بدلاً من الكائنات المعقدة
       String resultPath = await PdfGeneratorService.generatePapersInIsolate(
-        excelData: _excelData!,
+        excelPath: _excelPath!,
+        qrFolderPath: _qrFolderPath ?? "",
         selectedClass: _selectedClass!,
         selectedSubject: subjectOrderNumber.toString(),
         fontData: fontData,
@@ -154,7 +150,7 @@ class _HomeScreenState extends State<HomeScreen> {
         SnackBar(
           content: Text("✅ تم توليد وحفظ أوراق الاختبار بنجاح:\n$resultPath", textAlign: TextAlign.center),
           backgroundColor: Colors.green,
-          duration: const Duration(seconds: 4),
+          duration: const Duration(seconds: 5),
         ),
       );
     } catch (e) {
@@ -162,7 +158,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center),
+          content: Text("خطأ أثناء توليد أوراق الاختبارات: ${e.toString().replaceAll('Exception: ', '')}", textAlign: TextAlign.center),
           backgroundColor: Colors.red,
         ),
       );
