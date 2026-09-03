@@ -148,6 +148,8 @@ class _HomeScreenState extends State<HomeScreen> {
         fontData: fontData,
       );
 
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("✅ تم توليد وحفظ أوراق الاختبار بنجاح:\n$resultPath", textAlign: TextAlign.center),
@@ -156,6 +158,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } catch (e) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("خطأ أثناء توليد أوراق الاختبارات: $e", textAlign: TextAlign.center),
@@ -163,9 +167,11 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } finally {
-      setState(() {
-        _isGenerating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+        });
+      }
     }
   }
 
