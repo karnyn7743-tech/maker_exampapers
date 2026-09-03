@@ -41,7 +41,7 @@ class PdfGeneratorService {
     final String folderPath = await _getPublicFolderPath();
     final Uint8List fontBytes = fontData.buffer.asUint8List();
 
-    // تشغيل العمليات الثقيلة (قراءة الأكسيل وفحص الصور ورسم بايتات المستند) في الخلفية
+    // تشغيل العمليات الثقيلة (قراءة الأكسيل وفحص الصور) في الخلفية
     final Map<String, dynamic> result = await compute(_heavyPdfGenerationTask, {
       'excelPath': excelPath,
       'qrFolderPath': qrFolderPath,
@@ -79,8 +79,7 @@ class PdfGeneratorService {
             return pw.Directionality(
               textDirection: pw.TextDirection.rtl, 
               child: pw.Column(
-                pw.Column(
-                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,, 
+                crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                 children: [
                   // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
@@ -195,12 +194,11 @@ class PdfGeneratorService {
         
         if (row == null || row.isEmpty) continue;
 
-        // قراءة آمنة تمنع التعليق والـ Null Reference
         String seatNumber = (row.length > 0 && row[0]?.value != null) ? row[0]!.value.toString().trim() : ""; 
         String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
         String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
 
-        // 🏆 شرط الأمان: التوقف الفوري عند بلوغ نهاية أسطر البيانات الحقيقية وتفادي الخلايا الفارغة المنسقة
+        // التوقف عند الأسطر الفارغة لتفادي التعليق
         if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
           break; 
         }
