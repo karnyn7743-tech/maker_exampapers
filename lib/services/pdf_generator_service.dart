@@ -79,7 +79,8 @@ class PdfGeneratorService {
             return pw.Directionality(
               textDirection: pw.TextDirection.rtl, 
               child: pw.Column(
-                cross: pw.CrossAxisAlignment.stretch, 
+                pw.Column(
+                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,, 
                 children: [
                   // ---- الهيدر العلوي (اسم الطالب ورقم جلوسه) ----
                   pw.Container(
