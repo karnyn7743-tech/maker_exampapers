@@ -23,6 +23,9 @@ dependencies:
   # أضف هذه الحزمة هنا
   path_provider: ^2.1.2
 
+  # المكتبات الجديدة المطلوبة لنظام التفعيل
+  device_info_plus: ^10.1.0
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
