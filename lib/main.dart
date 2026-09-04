@@ -23,7 +23,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'ذو القرنين الهاشمي لإعداد وتوليد أوراق الاختبارات',
+      title: 'ذو القرنين الهاشمي لتوليد أوراق الاختبارات',
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true, // تم تعديل الخيار هنا لدعم إصدارات Flutter الحديثة
