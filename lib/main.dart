@@ -1,18 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'screens/home_screen.dart'; // استيراد الشاشة الرئيسية المستقلة الجديدة
+import 'screens/activation_screen.dart'; // استيراد شاشة التفعيل
+import 'services/activation_service.dart'; // استيراد خدمة التفعيل
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
   // طلب صلاحيات الوصول إلى الذاكرة والتخزين عند بدء التشغيل
   await _requestPermissions();
+
+  // فحص حالة التفعيل المسبق للتطبيق
+  bool isActivated = await ActivationService.isActivated();
   
-  runApp(const MyApp());
+  runApp(MyApp(isActivated: isActivated));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final bool isActivated;
+  const MyApp({super.key, required this.isActivated});
 
   @override
   Widget build(BuildContext context) {
@@ -23,7 +29,8 @@ class MyApp extends StatelessWidget {
         useMaterial3: true, // تم تعديل الخيار هنا لدعم إصدارات Flutter الحديثة
       ),
       debugShowCheckedModeBanner: false,
-      home: const HomeScreen(), // توجيه التطبيق ليفتح مباشرة على واجهة التوليد المرنة
+      // التوجيه الشفاف: فتح الواجهة الرئيسية مباشرة إذا كان مفصّلاً، أو التوجيه لشاشة التفعيل
+      home: isActivated ? const HomeScreen() : const ActivationScreen(),
     );
   }
 }
