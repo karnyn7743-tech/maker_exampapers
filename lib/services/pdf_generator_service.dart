@@ -57,7 +57,6 @@ class PdfGeneratorService {
     }
 
     final pdf = pw.Document();
-    // تحميل الخط كـ TtfWithFallback لضمان دعم كافة الحروف
     final ttfFont = pw.Font.ttf(fontData);
 
     for (var student in studentsList) {
@@ -69,7 +68,6 @@ class PdfGeneratorService {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          // ✅ هوامش مخصصة: 4 ملم من الأعلى والأسفل، مع هوامش جانبية معقولة
           margin: pw.EdgeInsets.only(
             top: 4 * PdfPageFormat.mm,
             bottom: 4 * PdfPageFormat.mm,
@@ -111,13 +109,10 @@ class PdfGeneratorService {
                         ),
                         pw.SizedBox(width: 15),
 
-                        // المربع 2: صورة الـ QR Code
-                        pw.Container(
+                        // المربع 2: صورة الـ QR Code (بدون إطار)
+                        pw.SizedBox(
                           width: 45,
                           height: 45,
-                          decoration: pw.BoxDecoration(
-                            border: pw.Border.all(color: PdfColors.black, width: 1.2),
-                          ),
                           child: qrImageProvider != null
                               ? pw.Image(qrImageProvider, fit: pw.BoxFit.fill)
                               : pw.BarcodeWidget( 
@@ -194,6 +189,8 @@ class PdfGeneratorService {
         String seatNumber = (row.length > 0 && row[0]?.value != null) ? row[0]!.value.toString().trim() : ""; 
         String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
         String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
+        // ✅ العمود D = الرقم السري للطالب (بيانات QR)
+        String secretNumber = (row.length > 3 && row[3]?.value != null) ? row[3]!.value.toString().trim() : "";
 
         if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
           break; 
@@ -201,10 +198,11 @@ class PdfGeneratorService {
 
         if (className != selectedClass || seatNumber.isEmpty) continue;
 
+        // ✅ البحث عن صورة QR باسم رقم الجلوس (العمود A) فقط
         Uint8List? qrImageBytes;
         File qrFile = File("$qrFolderPath/$seatNumber.png");
         if (!qrFile.existsSync()) {
-          qrFile = File("$qrFolderPath/$seatNumber.jpg"); 
+          qrFile = File("$qrFolderPath/$seatNumber.jpg");
         }
 
         if (qrFile.existsSync()) {
@@ -214,7 +212,7 @@ class PdfGeneratorService {
         studentsList.add({
           'studentId': seatNumber,
           'studentName': studentName,
-          'qrData': seatNumber,
+          'qrData': secretNumber, // ✅ QR يحتوي على الرقم السري (D)
           'qrImageBytes': qrImageBytes, 
         });
       }
