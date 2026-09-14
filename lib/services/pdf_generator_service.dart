@@ -69,7 +69,13 @@ class PdfGeneratorService {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.all(35),
+          // ✅ هوامش مخصصة: 4 ملم من الأعلى والأسفل، مع هوامش جانبية معقولة
+          margin: pw.EdgeInsets.only(
+            top: 4 * PdfPageFormat.mm,
+            bottom: 4 * PdfPageFormat.mm,
+            left: 35,
+            right: 35,
+          ),
           theme: pw.ThemeData.withFont(base: ttfFont),
           build: (pw.Context context) {
             return pw.Directionality(
@@ -77,26 +83,20 @@ class PdfGeneratorService {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                 children: [
-                  // ---- الهيدر العلوي ----
-                  pw.Container(
-                    decoration: pw.BoxDecoration(
-                      border: pw.Border.all(color: PdfColors.black, width: 1.2),
-                    ),
-                    padding: const pw.EdgeInsets.symmetric(horizontal: 15, vertical: 10),
-                    child: pw.Row(
-                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                      children: [
-                        pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                        pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                      ],
-                    ),
+                  // ---- الهيدر العلوي (بدون إطار مستطيل) ----
+                  pw.Row(
+                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                    children: [
+                      pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                      pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                    ],
                   ),
 
                   pw.Spacer(), 
 
-                  // ---- الفوتر السفلي (تم ضبطه ليجبر المحاذاة لأقصى اليسار) ----
+                  // ---- الفوتر السفلي (المربعات الثلاثة على 4 ملم من الأسفل) ----
                   pw.Directionality(
-                    textDirection: pw.TextDirection.ltr, // المحاذاة من اليسار لليمين
+                    textDirection: pw.TextDirection.ltr,
                     child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       children: [
