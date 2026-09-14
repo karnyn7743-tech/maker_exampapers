@@ -69,7 +69,7 @@ class PdfGeneratorService {
         pw.Page(
           pageFormat: PdfPageFormat.a4,
           margin: pw.EdgeInsets.only(
-            top: 4 * PdfPageFormat.mm,
+            top: 2 * PdfPageFormat.mm,
             bottom: 4 * PdfPageFormat.mm,
             left: 35,
             right: 35,
@@ -85,8 +85,8 @@ class PdfGeneratorService {
                   pw.Row(
                     mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                     children: [
-                      pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
-                      pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(font: ttfFont, fontSize: 13, fontWeight: pw.FontWeight.bold)),
+                      pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(font: ttfFont, fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                      pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(font: ttfFont, fontSize: 11, fontWeight: pw.FontWeight.bold)),
                     ],
                   ),
 
