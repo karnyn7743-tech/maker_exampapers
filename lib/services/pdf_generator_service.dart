@@ -68,8 +68,8 @@ class PdfGeneratorService {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          margin: pw.EdgeInsets.only(
-            top: 0 * PdfPageFormat.mm,
+          margin: const pw.EdgeInsets.only(
+            top: 1 * PdfPageFormat.mm,
             bottom: 2 * PdfPageFormat.mm,
             left: 35,
             right: 35,
@@ -81,35 +81,41 @@ class PdfGeneratorService {
               child: pw.Column(
                 crossAxisAlignment: pw.CrossAxisAlignment.stretch,
                 children: [
-                  // ---- الهيدر العلوي (بدون إطار مستطيل) ----
-                  pw.Row(
-                    mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-                    children: [
-                      pw.Text("اسم الطالب: ${student['studentName']}", style: pw.TextStyle(font: ttfFont, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                      pw.Text("رقم الجلوس: ${student['studentId']}", style: pw.TextStyle(font: ttfFont, fontSize: 11, fontWeight: pw.FontWeight.bold)),
-                    ],
+                  // ---- الهيدر العلوي: نصوص حرة بدون أي حاويات أو إطارات مخفية ----
+                  pw.Padding(
+                    padding: const pw.EdgeInsets.symmetric(vertical: 1 * PdfPageFormat.mm),
+                    child: pw.Row(
+                      mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                      children: [
+                        pw.Text(
+                          "اسم الطالب: ${student['studentName']}", 
+                          style: pw.TextStyle(font: ttfFont, fontSize: 11, fontWeight: pw.FontWeight.bold),
+                        ),
+                        pw.Text(
+                          "رقم الجلوس: ${student['studentId']}", 
+                          style: pw.TextStyle(font: ttfFont, fontSize: 11, fontWeight: pw.FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
 
                   pw.Spacer(), 
 
-                  // ---- الفوتر السفلي (المربعات الثلاثة على 4 ملم من الأسفل) ----
+                  // ---- الفوتر السفلي: مساحات حرة ومفتوحة بدون حدود مربعات ----
                   pw.Directionality(
                     textDirection: pw.TextDirection.ltr,
                     child: pw.Row(
                       mainAxisAlignment: pw.MainAxisAlignment.start,
                       children: [
-                        // المربع 1: المربع الأزرق الفارغ
-                        pw.Container(
+                        // 1. مساحة رصد الدرجة (أبيض ناصع بدون أي خطوط حدودية)
+                        pw.SizedBox(
                           width: 45,
                           height: 45,
-                          decoration: pw.BoxDecoration(
-                            color: const PdfColor.fromInt(0xFFE3F2FD), 
-                            border: pw.Border.all(color: PdfColors.black, width: 1.2),
-                          ),
                         ),
+
                         pw.SizedBox(width: 15),
 
-                        // المربع 2: صورة الـ QR Code (بدون إطار)
+                        // 2. رمز الاستجابة السريعة QR في المنتصف (بدون أي إطار)
                         pw.SizedBox(
                           width: 45,
                           height: 45,
@@ -121,19 +127,22 @@ class PdfGeneratorService {
                                   drawText: false,
                                 ),
                         ),
+
                         pw.SizedBox(width: 15),
 
-                        // المربع 3: رقم المادة
-                        pw.Container(
+                        // 3. كود المادة (مطبوع مباشرة على بياض الورقة بدون أي إطار)
+                        pw.SizedBox(
                           width: 45,
                           height: 45,
-                          alignment: pw.Alignment.center,
-                          decoration: pw.BoxDecoration(
-                            border: pw.Border.all(color: PdfColors.black, width: 1.5),
-                          ),
-                          child: pw.Text(
-                            selectedSubject,
-                            style: pw.TextStyle(font: ttfFont, fontSize: 16, fontWeight: pw.FontWeight.bold),
+                          child: pw.Center(
+                            child: pw.Text(
+                              selectedSubject,
+                              style: pw.TextStyle(
+                                font: ttfFont, 
+                                fontSize: 18, 
+                                fontWeight: pw.FontWeight.bold,
+                              ),
+                            ),
                           ),
                         ),
                       ],
@@ -189,7 +198,6 @@ class PdfGeneratorService {
         String seatNumber = (row.length > 0 && row[0]?.value != null) ? row[0]!.value.toString().trim() : ""; 
         String studentName = (row.length > 1 && row[1]?.value != null) ? row[1]!.value.toString().trim() : ""; 
         String className = (row.length > 2 && row[2]?.value != null) ? row[2]!.value.toString().trim() : ""; 
-        // ✅ العمود D = الرقم السري للطالب (بيانات QR)
         String secretNumber = (row.length > 3 && row[3]?.value != null) ? row[3]!.value.toString().trim() : "";
 
         if (seatNumber.isEmpty && studentName.isEmpty && className.isEmpty) {
@@ -198,7 +206,6 @@ class PdfGeneratorService {
 
         if (className != selectedClass || seatNumber.isEmpty) continue;
 
-        // ✅ البحث عن صورة QR باسم رقم الجلوس (العمود A) فقط
         Uint8List? qrImageBytes;
         File qrFile = File("$qrFolderPath/$seatNumber.png");
         if (!qrFile.existsSync()) {
@@ -212,7 +219,7 @@ class PdfGeneratorService {
         studentsList.add({
           'studentId': seatNumber,
           'studentName': studentName,
-          'qrData': secretNumber, // ✅ QR يحتوي على الرقم السري (D)
+          'qrData': secretNumber,
           'qrImageBytes': qrImageBytes, 
         });
       }
