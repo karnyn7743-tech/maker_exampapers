@@ -69,8 +69,8 @@ class PdfGeneratorService {
         pw.Page(
           pageFormat: PdfPageFormat.a4,
           margin: pw.EdgeInsets.only(
-            top: 2 * PdfPageFormat.mm,
-            bottom: 4 * PdfPageFormat.mm,
+            top: 0 * PdfPageFormat.mm,
+            bottom: 2 * PdfPageFormat.mm,
             left: 35,
             right: 35,
           ),
